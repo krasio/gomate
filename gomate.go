@@ -69,7 +69,7 @@ func main() {
 			Name:        "load",
 			ShortName:   "l",
 			Usage:       "Replaces collection specified by TYPE with items read from stdin in the JSON lines format.",
-			Description: "Replaces collection specified by TYPE with items read from stdin in the JSON lines format.",
+			Description: "load [TYPE] < path/to/data.json",
 			Action: func(c *cli.Context) {
 				kind := c.Args()[0]
 				// Connect to Redis
@@ -116,7 +116,7 @@ func main() {
 			Name:        "query",
 			ShortName:   "q",
 			Usage:       "Queries for items from collection specified by TYPE.",
-			Description: "Queries for items from collection specified by TYPE.",
+			Description: "query [TYPE] [TERM]",
 			Action: func(c *cli.Context) {
 				kind := c.Args()[0]
 				query := c.Args()[1]
