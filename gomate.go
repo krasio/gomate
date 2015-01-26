@@ -160,9 +160,16 @@ func main() {
 					}
 				}
 
-				for _, match := range matches {
-					fmt.Printf("  %s\n", match.Term)
+				fmt.Println()
+				if len(matches) > 0 {
+					for _, match := range matches {
+						fmt.Printf("  %s\n", match.Term)
+					}
+				} else {
+					fmt.Println("  Sorry, nothing found. ¯\\_(ツ)_/¯")
 				}
+				fmt.Println()
+
 			},
 		},
 	}
