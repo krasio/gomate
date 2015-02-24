@@ -20,35 +20,6 @@ type Item struct {
 	Data map[string]interface{} `json:"data"`
 }
 
-func base(kind string) string {
-	return "gomate-index:" + kind
-}
-
-func database(kind string) string {
-	return "gomate-data:" + kind
-}
-
-func cachebase(kind string) string {
-	return "gomate-cache:" + kind
-}
-
-func prefixesForPhrase(phrase string) []string {
-	words := strings.Split(normalize(phrase), " ")
-	prefixes := []string{}
-	for _, word := range words {
-		for i := 2; i <= len(word); i++ {
-			prefixes = append(prefixes, word[:i])
-		}
-	}
-
-	return prefixes
-}
-
-func normalize(phrase string) string {
-	cleanup := regexp.MustCompile(`[^[:word:] ]`)
-	return strings.ToLower(cleanup.ReplaceAllString(phrase, ""))
-}
-
 func Load(kind string, conn redis.Conn) {
 	item_base := base(kind)
 	phrases, err := redis.Strings(conn.Do("SMEMBERS", item_base))
@@ -119,4 +90,33 @@ func Query(kind string, query string, conn redis.Conn) []Item {
 	}
 
 	return matches
+}
+
+func base(kind string) string {
+	return "gomate-index:" + kind
+}
+
+func database(kind string) string {
+	return "gomate-data:" + kind
+}
+
+func cachebase(kind string) string {
+	return "gomate-cache:" + kind
+}
+
+func prefixesForPhrase(phrase string) []string {
+	words := strings.Split(normalize(phrase), " ")
+	prefixes := []string{}
+	for _, word := range words {
+		for i := 2; i <= len(word); i++ {
+			prefixes = append(prefixes, word[:i])
+		}
+	}
+
+	return prefixes
+}
+
+func normalize(phrase string) string {
+	cleanup := regexp.MustCompile(`[^[:word:] ]`)
+	return strings.ToLower(cleanup.ReplaceAllString(phrase, ""))
 }
