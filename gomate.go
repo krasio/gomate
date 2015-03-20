@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/garyburd/redigo/redis"
+	"github.com/soveran/redisurl"
 )
 
 type Item struct {
@@ -18,6 +19,15 @@ type Item struct {
 	Term string                 `json:"term"`
 	Rank int64                  `json:"rank"`
 	Data map[string]interface{} `json:"data"`
+}
+
+func Connect(url string) redis.Conn {
+	fmt.Printf("Connecting to Redis using %s.\n", url)
+	conn, err := redisurl.ConnectToURL(url)
+	if err != nil {
+		panic(err)
+	}
+	return conn
 }
 
 func Load(kind string, conn redis.Conn) {
@@ -68,7 +78,10 @@ func Query(kind string, query string, conn redis.Conn) []Item {
 	if len(words) > 0 {
 		sort.Strings(words)
 		cachekey := cachebase(kind) + ":" + strings.Join(words, "|")
-		exists, _ := conn.Do("EXISTS", cachekey)
+		exists, err := conn.Do("EXISTS", cachekey)
+		if err != nil {
+			panic(err)
+		}
 		if exists.(int64) == 0 {
 			interkeys := make([]string, len(words))
 			for i, word := range words {
