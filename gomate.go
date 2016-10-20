@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/garyburd/redigo/redis"
+	"github.com/pkg/errors"
 	"github.com/soveran/redisurl"
 )
 
@@ -21,13 +22,11 @@ type Item struct {
 	Data map[string]interface{} `json:"data"`
 }
 
-func Connect(url string) redis.Conn {
+func Connect(url string) (conn redis.Conn, err error) {
 	fmt.Printf("Connecting to Redis using %s.\n", url)
-	conn, err := redisurl.ConnectToURL(url)
-	if err != nil {
-		panic(err)
-	}
-	return conn
+	conn, err = redisurl.ConnectToURL(url)
+
+	return conn, errors.WithMessage(err, "Can't connect to Redis using "+url)
 }
 
 func Load(kind string, conn redis.Conn) {
