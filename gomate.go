@@ -53,14 +53,18 @@ func BulkLoad(kind string, reader io.Reader, conn redis.Conn) (int, error) {
 }
 
 func LoadItem(item *Item, conn redis.Conn) error {
-	conn.Do("HSET", database(item.Kind), item.Id, item.Raw)
-	item_base := base(item.Kind)
-	for _, p := range prefixesForPhrase(item.Term) {
-		conn.Do("SADD", item_base, p)
-		conn.Do("ZADD", item_base+":"+p, item.Rank, item.Id)
+	err := conn.Send("MULTI")
+	if err == nil {
+		conn.Send("HSET", database(item.Kind), item.Id, item.Raw)
+		item_base := base(item.Kind)
+		for _, p := range prefixesForPhrase(item.Term) {
+			conn.Send("SADD", item_base, p)
+			conn.Send("ZADD", item_base+":"+p, item.Rank, item.Id)
+		}
+		_, err = conn.Do("EXEC")
 	}
 
-	return nil
+	return errors.WithMessage(err, "Failed to load item for "+item.Kind)
 }
 
 func Query(kind string, query string, conn redis.Conn) []Item {
