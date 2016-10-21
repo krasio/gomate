@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 	"regexp"
 	"sort"
 	"strings"
@@ -20,6 +20,7 @@ type Item struct {
 	Term string                 `json:"term"`
 	Rank int64                  `json:"rank"`
 	Data map[string]interface{} `json:"data"`
+	Raw  []byte
 }
 
 func Connect(url string) (conn redis.Conn, err error) {
@@ -29,40 +30,37 @@ func Connect(url string) (conn redis.Conn, err error) {
 	return conn, errors.WithMessage(err, "Can't connect to Redis using "+url)
 }
 
-func Load(kind string, conn redis.Conn) {
-	item_base := base(kind)
-	phrases, err := redis.Strings(conn.Do("SMEMBERS", item_base))
-	if err != nil {
-		panic(err)
+func BulkLoad(kind string, reader io.Reader, conn redis.Conn) (int, error) {
+	if err := Cleanup(kind, conn); err != nil {
+		return 0, err
 	}
-	for _, p := range phrases {
-		conn.Do("DEL", item_base+":"+p)
-	}
-	conn.Do("DEL", item_base)
-	conn.Do("DEL", database(kind))
-	conn.Do("DEL", cachebase(kind))
 
-	fmt.Printf("Loading items of type \"%s\"...\n", kind)
-
-	// Start reading input from stdin
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := bufio.NewScanner(reader)
 	scanner.Split(bufio.ScanLines)
+
 	item := Item{Kind: kind}
 	i := 0
 	for ; scanner.Scan(); i++ {
 		raw := scanner.Bytes()
-		if err := json.Unmarshal(raw, &item); err != nil {
-			panic(err)
-		}
-
-		conn.Do("HSET", database(kind), item.Id, raw)
-		for _, p := range prefixesForPhrase(item.Term) {
-			conn.Do("SADD", item_base, p)
-			conn.Do("ZADD", item_base+":"+p, item.Rank, item.Id)
+		if err := json.Unmarshal(raw, &item); err == nil {
+			item.Raw = raw
+			LoadItem(&item, conn)
 		}
 	}
 
 	fmt.Println("Loaded a total of", i, "items.")
+	return i, nil
+}
+
+func LoadItem(item *Item, conn redis.Conn) error {
+	conn.Do("HSET", database(item.Kind), item.Id, item.Raw)
+	item_base := base(item.Kind)
+	for _, p := range prefixesForPhrase(item.Term) {
+		conn.Do("SADD", item_base, p)
+		conn.Do("ZADD", item_base+":"+p, item.Rank, item.Id)
+	}
+
+	return nil
 }
 
 func Query(kind string, query string, conn redis.Conn) []Item {
@@ -102,6 +100,29 @@ func Query(kind string, query string, conn redis.Conn) []Item {
 	}
 
 	return matches
+}
+
+func Cleanup(kind string, conn redis.Conn) error {
+	err_message := "Failed to cleanup for " + kind
+	item_base := base(kind)
+
+	phrases, err := redis.Strings(conn.Do("SMEMBERS", item_base))
+	if err != nil {
+		return errors.Wrap(err, err_message)
+	}
+
+	err = conn.Send("MULTI")
+	if err == nil {
+		for _, p := range phrases {
+			conn.Send("DEL", item_base+":"+p)
+		}
+		conn.Send("DEL", item_base)
+		conn.Send("DEL", database(kind))
+		conn.Send("DEL", cachebase(kind))
+		_, err = conn.Do("EXEC")
+	}
+
+	return errors.WithMessage(err, err_message)
 }
 
 func base(kind string) string {
