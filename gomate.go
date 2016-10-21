@@ -20,7 +20,7 @@ type Item struct {
 	Term string                 `json:"term"`
 	Rank int64                  `json:"rank"`
 	Data map[string]interface{} `json:"data"`
-	Raw  []byte
+	Raw  string
 }
 
 func Connect(url string) (conn redis.Conn, err error) {
@@ -43,7 +43,7 @@ func BulkLoad(kind string, reader io.Reader, conn redis.Conn) (int, error) {
 	for ; scanner.Scan(); i++ {
 		raw := scanner.Bytes()
 		if err := json.Unmarshal(raw, &item); err == nil {
-			item.Raw = raw
+			item.Raw = string(raw)
 			LoadItem(&item, conn)
 		}
 	}
