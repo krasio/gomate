@@ -67,6 +67,36 @@ func LoadItem(item *Item, conn redis.Conn) error {
 	return errors.WithMessage(err, "Failed to load item for "+item.Kind)
 }
 
+func Remove(kind string, id string, conn redis.Conn) (bool, error) {
+	raw, _ := redis.Bytes(conn.Do("HGET", database(kind), id))
+	if raw == nil {
+		return false, nil
+	}
+
+	item := Item{Kind: kind}
+	if err := json.Unmarshal(raw, &item); err != nil {
+		return false, errors.Wrap(err, "Failed to decode data for "+kind+" "+id)
+	}
+
+	err := conn.Send("MULTI")
+	if err == nil {
+		conn.Send("HDEL", database(kind), id)
+		item_base := base(item.Kind)
+		for _, p := range prefixesForPhrase(item.Term) {
+			conn.Send("SREM", item_base, p)
+			conn.Send("ZREM", item_base+":"+p, item.Id)
+			conn.Send("ZREM", cachebase(item.Kind)+":"+p, item.Id)
+		}
+		_, err = conn.Do("EXEC")
+		if err != nil {
+			panic(err)
+			fmt.Println("ERR " + err.Error())
+		}
+	}
+
+	return true, nil
+}
+
 func Query(kind string, query string, conn redis.Conn) []Item {
 	matches := []Item{}
 	words := []string{}
@@ -119,6 +149,7 @@ func Cleanup(kind string, conn redis.Conn) error {
 	if err == nil {
 		for _, p := range phrases {
 			conn.Send("DEL", item_base+":"+p)
+			conn.Send("DEL", cachebase(kind)+":"+p)
 		}
 		conn.Send("DEL", item_base)
 		conn.Send("DEL", database(kind))
